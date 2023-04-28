@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: card-tokenization
+  labels:
+    app: card-tokenization
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: app-card-tokenization
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: app-card-tokenization
+    spec:
+      containers:
+      - image: <ecr-uri-goes-here>
+        imagePullPolicy: Always
+        name: app-card-tokenization
+        resources:
+          limits:
+            memory: 512Mi
+            cpu: "1"
+          requests:
+            memory: 128Mi
+            cpu: "0.2"
+        envFrom:
+          - configMapRef:
+              name: <configmap-name-goes-here>
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: card-tokenization
+  labels: 
+    app.kubernetes.io/name: app-card-tokenization
+spec:
+  ports:
+    - port: 3000
+      nodePort: 30072
+      protocol: TCP
+  type: NodePort
+  selector:
+    app.kubernetes.io/name: app-card-tokenization

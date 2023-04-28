@@ -1,0 +1,47 @@
+version: 0.2
+
+env: 
+  variables: 
+    ECR_URL: <ecr-uri-goes-here> 
+    ECR_REPO_NAME: <ecr-repo-name-goes-here>
+    TAG_IM: <ecr-image-tag-goes-here>
+    AWS_CLUSTER_NAME: <eks-name-goes-here>
+    APP: <app-name-goes-here>
+
+phases:
+  install:
+    commands:
+      - echo Installing app dependencies...
+      - curl -o kubectl https://amazon-eks.s3.us-west-2.amazonaws.com/1.15.10/2020-02-22/bin/linux/amd64/kubectl   
+      - chmod +x ./kubectl
+      - mkdir -p $HOME/bin && cp ./kubectl $HOME/bin/kubectl && export PATH=$PATH:$HOME/bin
+      - echo 'export PATH=$PATH:$HOME/bin' >> ~/.bashrc
+      - cat ~/.bashrc
+  pre_build:
+    commands:
+      - COMMIT_ID_SHORT=`echo "${CODEBUILD_RESOLVED_SOURCE_VERSION}" | cut -c1-8`
+      - TAG=`echo "${MAJOR}.${MINOR}.${COMMIT_ID_SHORT}"`
+      - aws --version
+      - aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $ECR_URL
+      - echo Logging in to Amazon EKS...
+      - aws eks --region us-east-1 update-kubeconfig --name $AWS_CLUSTER_NAME
+      - aws sts get-caller-identity
+      - kubectl get pods
+  build:  
+    commands:
+      - docker build -t ${APP} .
+      - docker tag ${APP}:${TAG_IM} ${ECR_URL}/${ECR_REPO_NAME}:${TAG_IM}
+  post_build:
+    commands:
+      - docker push ${ECR_URL}/${ECR_REPO_NAME}
+      - kubectl delete deployment ${APP}
+      - kubectl delete service ${APP}
+      - kubectl create -f ${APP}.yaml
+      - sleep 60
+      - echo ################# Inicio de validacion ############## 
+      - echo ...Validando Pod
+      - kubectl get pods | grep ${APP}
+      - echo ...Validando Deployment
+      - kubectl logs deployment/${APP}
+      - echo ...Validando servicio
+      - kubectl get svc
